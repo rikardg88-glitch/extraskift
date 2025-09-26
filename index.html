@@ -3,47 +3,59 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ønske om ekstraskift</title>
+  <title>Ukentlig Vaktplan</title>
   <style>
     :root {
-      --bg: #0b0f14;
-      --card: #11161d;
-      --muted: #94a3b8;
+      --bg: linear-gradient(180deg, #0b0f14, #0e1420 45%, #0b0f14);
       --text: #e5e7eb;
+      --muted: #94a3b8;
       --border: #233043;
+      --today: #334155;
       --day: #a9dfbf;
       --evening: #f9e79f;
       --night: #aed6f1;
-      --today: #334155;
     }
-    body { margin: 0; font-family: system-ui, sans-serif; color: var(--text); background: linear-gradient(180deg, #0b0f14, #0e1420 45%, #0b0f14); }
-    .wrapper { max-width: 1200px; margin: 32px auto; padding: 0 16px; }
-    header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
-    h1 { font-size: clamp(20px, 3vw, 28px); margin: 0; }
+
+    html, body { height: 100%; }
+    body { margin: 0; font-family: system-ui, sans-serif; color: var(--text); background: var(--bg); }
+
+    .wrapper { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+    h1 { font-size: clamp(20px, 3vw, 28px); margin: 0; font-weight: 800; }
     .sub { color: var(--muted); font-weight: 500; }
+
     .controls { display: flex; gap: 8px; margin-left: auto; }
     .btn { background: #1b2430; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    .btn:hover { background: #2a3545; }
+
     .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
-    .day-col { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
-    .day-header { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: center; }
-    .dow { font-weight: 800; }
+
+    .day-col { display: flex; flex-direction: column; gap: 8px; }
+
+    /* Kun boks rundt dato/dag */
+    .day-header { padding: 10px 12px; text-align: center; border: 2px solid var(--border); border-radius: 12px; background: #11161d; }
+    .today .day-header { border-color: var(--today); }
+    .dow { font-weight: 900; letter-spacing: .2px; }
     .date { font-size: 12px; color: var(--muted); }
-    .blocks { position: relative; height: 560px; display: flex; flex-direction: column; }
-    .shift { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: center; padding: 4px; overflow: hidden; }
-    .shift-header { font-weight: 800; font-size: 12px; color: #0b1320; text-shadow: 0 1px 0 rgb(255 255 255 / .35); margin-bottom: 4px; }
-    .names-list { text-align: left; background: rgb(255 255 255 / 0.35); border-radius: 8px; padding: 6px 6px 4px; min-height: 40px; font-size: 13px; font-weight: 800; color: #0b1320; line-height: 1.25; }
-    .names-list .name { display: block; }
+
+    .blocks { display: flex; flex-direction: column; gap: 8px; }
+
+    .shift { display: flex; flex-direction: column; align-items: stretch; text-align: center; padding: 6px; border-radius: 10px; }
+    .shift-header { font-weight: 800; font-size: 12px; color: #0b1320; margin-bottom: 4px; }
+
+    .names-list { text-align: left; padding: 4px 2px; min-height: 24px; font-size: 13px; font-weight: 600; color: #0b1320; line-height: 1.25; }
+    .name { display: block; padding: 2px 0; }
+
     .shift.day { background: var(--day); }
     .shift.evening { background: var(--evening); }
     .shift.night { background: var(--night); }
-    .today .day-header { outline: 2px solid var(--today); outline-offset: -2px; }
 
-    /* Påmeldingsmodal */
     .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); z-index: 50; padding: 16px; }
     .modal.open { display: flex; }
-    .dialog { width: min(900px, 96vw); background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    .dialog { width: min(900px, 96vw); background: #11161d; border: 1px solid var(--border); border-radius: 12px; padding: 16px; color: var(--text); }
     .dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-    .dialog h2 { margin: 0; font-size: 18px; }
+    .dialog h2 { margin: 0; font-size: 18px; font-weight: 800; }
     .dialog .body { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
     .field { display: grid; gap: 6px; }
     .field label { font-size: 12px; color: var(--muted); }
@@ -55,6 +67,9 @@
     .choice { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-size: 13px; }
     .dialog footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
     .btn.secondary { background: #121a25; }
+
+    @media (max-width: 960px) { .calendar { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) { .calendar { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -115,21 +130,17 @@
     function addDays(date, days) { const d = new Date(date); d.setUTCDate(d.getUTCDate() + days); return d; }
     function getShifts(dayIndex) { return (dayIndex >= 1 && dayIndex <= 4) ? WEEKDAY_SHIFTS : WEEKEND_SHIFTS; }
 
-    // --- Lagring av påmeldinger ---
+    // Lagring (med fallback hvis localStorage er blokkert)
     const memoryStore = new Map();
     function key(dateISO, shiftType) { return `signup:${dateISO}:${shiftType}`; }
     function loadNames(dateISO, shiftType) {
       const k = key(dateISO, shiftType);
-      try {
-        const raw = localStorage.getItem(k);
-        if (raw) return JSON.parse(raw);
-      } catch (e) { /* ignorer */ }
+      try { const raw = localStorage.getItem(k); if (raw) return JSON.parse(raw); } catch (e) {}
       return memoryStore.get(k) || [];
     }
     function saveNames(dateISO, shiftType, arr) {
       const k = key(dateISO, shiftType);
-      try { localStorage.setItem(k, JSON.stringify(arr)); }
-      catch (e) { memoryStore.set(k, arr); }
+      try { localStorage.setItem(k, JSON.stringify(arr)); } catch (e) { memoryStore.set(k, arr); }
     }
 
     let weekData = [];
@@ -139,6 +150,9 @@
       if (!names.length) { container.innerHTML = '<em>Ingen påmeldinger enda</em>'; return; }
       container.innerHTML = names.map(n => `<span class="name">• ${n}</span>`).join('');
     }
+
+    // Konsistent skala: 1 time = X piksler (juster X ved behov)
+    const HOUR_PX = 20; // f.eks. 20px per time => 8t = 160px, 12t = 240px
 
     function render(offset = 0) {
       const today = new Date();
@@ -172,7 +186,8 @@
         shifts.forEach(s => {
           const block = document.createElement('div');
           block.className = `shift ${s.type}`;
-          block.style.height = `${(s.hours / 24) * 100}%`;
+          // 1 time = HOUR_PX, men behold dynamikk: bruk minHeight så ruten kan vokse ved mange navn
+          block.style.minHeight = `${s.hours * HOUR_PX}px`;
           block.dataset.date = dateISO;
           block.dataset.shift = s.type;
 
@@ -200,12 +215,12 @@
       range.textContent = `${fmtShort.format(start)} – ${fmt.format(addDays(start,6))}`;
     }
 
-    // Kontroller
+    // Navigasjon
     document.getElementById('prev').addEventListener('click', () => { render(-1); });
     document.getElementById('next').addEventListener('click', () => { render(1); });
     document.getElementById('today').addEventListener('click', () => { render(0); });
 
-    // --- Påmeldingslogikk ---
+    // Påmelding
     const modal = document.getElementById('signupModal');
     const choicesEl = document.getElementById('choices');
     const nameInput = document.getElementById('nameInput');
@@ -254,14 +269,14 @@
       checks.forEach(ch => {
         const [dateISO, shiftType] = ch.value.split('|');
         const arr = loadNames(dateISO, shiftType);
-        if (!arr.includes(name)) arr.push(name);
+        if (!arr.includes(name)) arr.push(name); // unike påmeldinger per skift
         saveNames(dateISO, shiftType, arr);
-        updates.push({ dateISO, shiftType, arr });
+        updates.push({ dateISO, shiftType });
       });
 
-      updates.forEach(({ dateISO, shiftType, arr }) => {
+      updates.forEach(({ dateISO, shiftType }) => {
         document.querySelectorAll(`.shift[data-date="${dateISO}"][data-shift="${shiftType}"] .names-list`).forEach(list => {
-          list.innerHTML = arr.length ? arr.map(n => `<span class=\"name\">• ${n}</span>`).join('') : '<em>Ingen påmeldinger enda</em>';
+          renderNamesList(list, dateISO, shiftType);
         });
       });
 
@@ -269,7 +284,49 @@
       closeSignupModal();
     });
 
+    // Start
     render(0);
+
+    // Rydd bort evt. gammelt testnavn "Test" på fredag dagvakt i nåværende 7-dagersvisning
+    (function cleanupTestNameFriday(){
+      weekData.forEach(day => {
+        if (day.dow === 'Fredag') {
+          const arr = loadNames(day.dateISO, 'day');
+          const cleaned = arr.filter(n => (n||'').trim().toLowerCase() !== 'test');
+          if (cleaned.length !== arr.length) {
+            saveNames(day.dateISO, 'day', cleaned);
+            document.querySelectorAll(`.shift[data-date="${day.dateISO}"][data-shift="day"] .names-list`).forEach(list => {
+              renderNamesList(list, day.dateISO, 'day');
+            });
+          }
+        }
+      });
+    })();
+
+    // Enkle tester i konsollen (ikke forstyrrer UI/data)
+    (function tests(){
+      try {
+        console.groupCollapsed('%cTester: Vaktplan','color:#10b981');
+        // 1) Renders 7 dager
+        console.assert(document.querySelectorAll('.day-col').length === 7, 'Skal rendre 7 dager');
+        // 2) Antall skift per dagtype
+        console.assert(getShifts(1).length === 3 && getShifts(4).length === 3, 'Man–Tor = 3 skift');
+        console.assert(getShifts(5).length === 2 && getShifts(6).length === 2, 'Fre–Søn = 2 skift');
+        // 3) Skalahøyde: 8t og 12t følger 1t = HOUR_PX
+        (function(){
+          const tmp = document.createElement('div');
+          tmp.className = 'shift';
+          tmp.style.minHeight = `${8*HOUR_PX}px`;
+          document.body.appendChild(tmp);
+          const h8 = parseInt(getComputedStyle(tmp).minHeight);
+          tmp.style.minHeight = `${12*HOUR_PX}px`;
+          const h12 = parseInt(getComputedStyle(tmp).minHeight);
+          document.body.removeChild(tmp);
+          console.assert(h12 > h8 && h8 === 8*HOUR_PX && h12 === 12*HOUR_PX, 'Skala 1t = HOUR_PX feilet');
+        })();
+        console.groupEnd();
+      } catch(e) { console.error('Tester feilet', e); }
+    })();
   </script>
 </body>
 </html>
