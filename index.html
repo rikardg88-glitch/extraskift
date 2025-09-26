@@ -36,7 +36,8 @@
     .shift.evening { background: var(--evening); }
     .shift.night { background: var(--night); }
     .today .day-header { outline: 2px solid var(--today); outline-offset: -2px; }
-      /* Signup modal */
+
+    /* Signup modal */
     .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); z-index: 50; padding: 16px; }
     .modal.open { display: flex; }
     .dialog { width: min(900px, 96vw); background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
@@ -114,12 +115,21 @@
     function getShifts(dayIndex) { return (dayIndex >= 1 && dayIndex <= 4) ? WEEKDAY_SHIFTS : WEEKEND_SHIFTS; }
 
     // --- Sign-up storage helpers ---
-    function storageKey(dateISO, shiftType) { return `signup:${dateISO}:${shiftType}`; }
+    // Use localStorage when available; fall back to an in-memory store so the UI still works in sandboxed browsers.
+    const memoryStore = new Map();
+    function key(dateISO, shiftType) { return `signup:${dateISO}:${shiftType}`; }
     function loadNames(dateISO, shiftType) {
-      try { return JSON.parse(localStorage.getItem(storageKey(dateISO, shiftType)) || '[]'); } catch { return []; }
+      const k = key(dateISO, shiftType);
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { /* ignore */ }
+      return memoryStore.get(k) || [];
     }
     function saveNames(dateISO, shiftType, arr) {
-      localStorage.setItem(storageKey(dateISO, shiftType), JSON.stringify(arr.slice(0, 24))); // cap to 24 entries
+      const k = key(dateISO, shiftType);
+      try { localStorage.setItem(k, JSON.stringify(arr)); }
+      catch (e) { memoryStore.set(k, arr); }
     }
 
     // Keep the currently rendered week data to build the modal choices
@@ -242,18 +252,21 @@
       const checks = choicesEl.querySelectorAll('input[type="checkbox"]:checked');
       if (!checks.length) return;
 
+      // Apply to each selected shift
+      const updates = [];
       checks.forEach(ch => {
         const [dateISO, shiftType] = ch.value.split('-');
         const arr = loadNames(dateISO, shiftType);
         if (!arr.includes(name)) arr.push(name);
         saveNames(dateISO, shiftType, arr);
+        updates.push({ dateISO, shiftType, arr });
       });
 
-      // Update visible lists without full re-render
-      document.querySelectorAll('.shift').forEach(el => {
-        const dateISO = el.dataset.date; const shiftType = el.dataset.shift;
-        const list = el.querySelector('.names-list');
-        if (list) renderNamesList(list, dateISO, shiftType);
+      // Update visible lists without relying on storage reads (works in sandbox/private mode)
+      updates.forEach(({ dateISO, shiftType, arr }) => {
+        document.querySelectorAll(`.shift[data-date="${dateISO}"][data-shift="${shiftType}"] .names-list`).forEach(list => {
+          list.innerHTML = arr.length ? arr.map(n => `• ${n}`).join('<br>') : '<em>No sign-ups yet</em>';
+        });
       });
 
       nameInput.value = '';
@@ -262,6 +275,32 @@
 
     // Initial render
     render(0);
+
+    // -----------------
+    // Basic sanity tests
+    // -----------------
+    (function runTests(){
+      try {
+        console.groupCollapsed('%cShift Calendar Tests','color:#10b981');
+        // getShifts returns weekday pattern for Mon-Thu (1..4) and weekend otherwise
+        console.assert(getShifts(1).length === 3 && getShifts(4).length === 3, 'Weekday shifts should be 3 blocks');
+        console.assert(getShifts(0).length === 2 && getShifts(6).length === 2, 'Weekend shifts should be 2 blocks');
+
+        // Render created 7 columns
+        const cols = document.querySelectorAll('.day-col').length;
+        console.assert(cols === 7, 'Should render 7 day columns, got '+cols);
+
+        // Storage roundtrip
+        const todayISO = new Date().toISOString().slice(0,10);
+        saveNames(todayISO, 'day', ['Test User']);
+        const loaded = loadNames(todayISO, 'day');
+        console.assert(Array.isArray(loaded) && loaded.includes('Test User'), 'Storage load/save failed');
+
+        console.groupEnd();
+      } catch(e) {
+        console.error('Tests failed', e);
+      }
+    })();
   </script>
 </body>
 </html>
