@@ -1,296 +1,267 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>7‑Day Work Shift Calendar</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="description" content="7‑day work calendar with QR signup via Google Form and live names from Google Sheet. No local storage. Mobile friendly. Ready for GitHub Pages." />
+  <title>Weekly Shift Calendar</title>
   <style>
-    html, body { height: 100%; }
-    .card { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
+    :root {
+      --bg: #0b0f14;
+      --card: #11161d;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --border: #233043;
+      --day: #a9dfbf;
+      --evening: #f9e79f;
+      --night: #aed6f1;
+      --today: #334155;
+    }
+    body { margin: 0; font-family: system-ui, sans-serif; color: var(--text); background: linear-gradient(180deg, #0b0f14, #0e1420 45%, #0b0f14); }
+    .wrapper { max-width: 1200px; margin: 32px auto; padding: 0 16px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+    h1 { font-size: clamp(20px, 3vw, 28px); margin: 0; }
+    .sub { color: var(--muted); font-weight: 500; }
+    .controls { display: flex; gap: 8px; margin-left: auto; }
+    .btn { background: #1b2430; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+    .day-col { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+    .day-header { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: center; }
+    .dow { font-weight: 800; }
+    .date { font-size: 12px; color: var(--muted); }
+    .blocks { position: relative; height: 560px; display: flex; flex-direction: column; }
+    .shift { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: center; padding: 4px; overflow: hidden; }
+    .shift-header { font-weight: 800; font-size: 12px; color: #0b1320; text-shadow: 0 1px 0 rgb(255 255 255 / .35); margin-bottom: 4px; }
+    .names-list { text-align: left; background: rgb(255 255 255 / 0.35); border-radius: 8px; padding: 4px; min-height: 40px; font-size: 12px; color: #0b1320; }
+    .shift.day { background: var(--day); }
+    .shift.evening { background: var(--evening); }
+    .shift.night { background: var(--night); }
+    .today .day-header { outline: 2px solid var(--today); outline-offset: -2px; }
+      /* Signup modal */
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); z-index: 50; padding: 16px; }
+    .modal.open { display: flex; }
+    .dialog { width: min(900px, 96vw); background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    .dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .dialog h2 { margin: 0; font-size: 18px; }
+    .dialog .body { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
+    .field { display: grid; gap: 6px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .input { background: #0f1622; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-weight: 600; }
+    .choices { max-height: 360px; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+    .day-group { padding: 6px 6px 8px; border-bottom: 1px dashed var(--border); }
+    .day-group:last-child { border-bottom: 0; }
+    .day-title { font-weight: 800; color: var(--muted); margin-bottom: 6px; }
+    .choice { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-size: 13px; }
+    .dialog footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+    .btn.secondary { background: #121a25; }
   </style>
 </head>
-<body class="min-h-full bg-slate-50 text-slate-800">
-  <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">7‑Day Work Shift Calendar</h1>
-      <nav class="flex items-center gap-2 text-sm">
-        <button id="refreshBtn" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:opacity-90">Refresh</button>
-        <button id="shareBtn" class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300">Copy page link</button>
-      </nav>
+<body>
+  <div class="wrapper">
+    <header>
+      <h1>Weekly Shift Calendar</h1>
+      <div id="range" class="sub"></div>
+      <div class="controls">
+        <button class="btn" id="prev">◀ Prev</button>
+        <button class="btn" id="today">Today</button>
+        <button class="btn" id="next">Next ▶</button>
+        <button class="btn" id="signupBtn">✚ Sign up</button>
+      </div>
+    </header>
+
+    <section id="calendar" class="calendar"></section>
+
+    <!-- Signup Modal -->
+    <div id="signupModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="signupTitle">
+      <div class="dialog">
+        <header>
+          <h2 id="signupTitle">Sign up for extra shifts</h2>
+          <button class="btn secondary" id="closeModal">✕</button>
+        </header>
+        <div class="body">
+          <div class="field">
+            <label for="nameInput">Your name</label>
+            <input id="nameInput" class="input" placeholder="Type your name" />
+            <small class="sub">You can select multiple days and shifts.</small>
+          </div>
+          <div class="choices" id="choices"></div>
+        </div>
+        <footer>
+          <button class="btn secondary" id="cancelBtn">Cancel</button>
+          <button class="btn" id="submitSignup">Add to selected shifts</button>
+        </footer>
+      </div>
     </div>
-  </header>
-
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <section id="tips" class="hidden mb-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 p-4 text-sm"></section>
-    <section class="mb-6 text-sm text-slate-600">
-      <p>This version works fully online: QR codes open your form; names are read live from your Google Sheet. No local storage. Phones and desktop supported.</p>
-    </section>
-
-    <section id="calendar" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></section>
-  </main>
-
-  <!-- QRCode library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-Mn6G2P0CBN1VYcFv9Jr8kZzuWCFdYbQOqXgQYzqU8W0nI/W2cs8s3kA3+1a9C3b5x7E1F3vJ9Eo0v4C2Qb9u0w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  </div>
 
   <script>
-    // ============================
-    // CONFIG — replace these with your own
-    // ============================
-    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo';
+    const TZ = 'Europe/Oslo';
+    const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-    // 1) Google Form URL to open from QR (plain view link is fine). If you have a pre‑filled template, paste that here instead.
-    //    If you paste a true pre‑filled template that contains placeholders or entry.x ids, the app will try to fill date/shift.
-    const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfhxqHshc0-MtuAReM5JOyxdXpuj_S6CZvOPgcKVuV2HlzVfQ/viewform?usp=pp_url";
-
-    // 2) Google Sheet (Responses) — make it public (Anyone with link: Viewer) or File → Share → Publish to web
-    //    Use your Sheet ID and the tab gid that contains responses.
-    const SHEET_ID = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4_xMK3RWlxzpArD6Dv_98Y5cQVwOIH4Uj-wxL2v3sISD7YAD_WOBgA5rtRrBrAsG8Unna9NsqAGuk/pubhtml"; // change if different
-    const SHEET_GID = "0"; // change if your responses tab is not gid=0
-
-    // If you PUBLISH the sheet, you can also use the CSV endpoint below (often a bit faster):
-    const USE_GVIZ = true; // set false to use published CSV endpoint
-
-    // Optional: If you created a genuine pre‑filled template with placeholders, set them here so we can swap values.
-    // Example placeholders you used while generating the pre‑filled link: __NAME__, 01/01/2030, __SHIFT__
-    const PREFILLED_TEMPLATE = ""; // paste your pre‑filled template URL (with placeholders) if you have one
-    const PLACEHOLDERS = { NAME: "__NAME__", DATE: "01/01/2030", SHIFT: "__SHIFT__" };
-
-    // ============================
-    // Shift definitions
-    // ============================
-    const SHIFTS_MON_THU = [
-      { key: 'day', label: 'Day', time: '07:00–15:00' },
-      { key: 'afternoon', label: 'Afternoon', time: '15:00–23:00' },
-      { key: 'night', label: 'Night', time: '23:00–07:00' },
+    const WEEKDAY_SHIFTS = [
+      { name: 'Day Shift', type: 'day', start: '07:00', end: '15:00', hours: 8 },
+      { name: 'Evening Shift', type: 'evening', start: '15:00', end: '23:00', hours: 8 },
+      { name: 'Night Shift', type: 'night', start: '23:00', end: '07:00', hours: 8 },
     ];
-    const SHIFTS_FRI_SUN = [
-      { key: 'day', label: 'Day', time: '08:00–20:00' },
-      { key: 'night', label: 'Night', time: '20:00–08:00' },
+    const WEEKEND_SHIFTS = [
+      { name: 'Day Shift', type: 'day', start: '07:00', end: '19:00', hours: 12 },
+      { name: 'Night Shift', type: 'night', start: '19:00', end: '07:00', hours: 12 },
     ];
 
-    // ============================
-    // Helpers
-    // ============================
-    const pad = n => (n < 10 ? '0' + n : '' + n);
-    const toISODate = d => [d.getFullYear(), pad(d.getMonth()+1), pad(d.getDate())].join('-');
-    const formatHuman = d => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', timeZone: TIMEZONE }).format(d);
-    const getNext7Days = () => Array.from({length:7}, (_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
-    const shiftsForDate = d => ([1,2,3,4].includes(d.getDay()) ? SHIFTS_MON_THU : SHIFTS_FRI_SUN);
+    const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric' });
+    const fmtShort = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short' });
 
-    function toDDMMYYYY(dateISO){ const [y,m,d]=dateISO.split('-'); return `${d}/${m}/${y}`; }
-    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+    function addDays(date, days) { const d = new Date(date); d.setUTCDate(d.getUTCDate() + days); return d; }
+    function getShifts(dayIndex) { return (dayIndex >= 1 && dayIndex <= 4) ? WEEKDAY_SHIFTS : WEEKEND_SHIFTS; }
 
-    function normalizeShift(value){
-      const v = String(value||'').trim().toLowerCase();
-      if (["day","dag","dagvakt"].includes(v)) return 'day';
-      if (["afternoon","evening","ettermiddag","aft"].includes(v)) return 'afternoon';
-      if (["night","natt","nightshift"].includes(v)) return 'night';
-      return null;
+    // --- Sign-up storage helpers ---
+    function storageKey(dateISO, shiftType) { return `signup:${dateISO}:${shiftType}`; }
+    function loadNames(dateISO, shiftType) {
+      try { return JSON.parse(localStorage.getItem(storageKey(dateISO, shiftType)) || '[]'); } catch { return []; }
+    }
+    function saveNames(dateISO, shiftType, arr) {
+      localStorage.setItem(storageKey(dateISO, shiftType), JSON.stringify(arr.slice(0, 24))); // cap to 24 entries
     }
 
-    function parseToISO(mixed){
-      if (!mixed) return null; const s = String(mixed).trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // YYYY-MM-DD
-      let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // DD/MM/YYYY
-      if (m) { const [_,d,mo,y]=m; return `${y}-${pad(+mo)}-${pad(+d)}`; }
-      m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/); // DD.MM.YYYY
-      if (m) { const [_,d,mo,y]=m; return `${y}-${pad(+mo)}-${pad(+d)}`; }
-      const dt = new Date(s); if (!isNaN(dt)) return toISODate(dt);
-      return null;
+    // Keep the currently rendered week data to build the modal choices
+    let weekData = [];
+
+    function renderNamesList(container, dateISO, shiftType) {
+      const names = loadNames(dateISO, shiftType);
+      if (!names.length) { container.innerHTML = '<em>No sign-ups yet</em>'; return; }
+      container.innerHTML = names.map(n => `<div>• ${n}</div>`).join('');
     }
 
-    function buildFormURL(dateISO, shiftKey){
-      // If a proper pre‑filled template exists, fill it; otherwise just use FORM_URL
-      if (PREFILLED_TEMPLATE && /__SHIFT__|01\/01\/2030|entry\./.test(PREFILLED_TEMPLATE)){
-        const shift = (SHIFTS_MON_THU.concat(SHIFTS_FRI_SUN)).find(s=>s.key===shiftKey);
-        const ddmmyyyy = toDDMMYYYY(dateISO);
-        return PREFILLED_TEMPLATE
-          .replace(PLACEHOLDERS.DATE, encodeURIComponent(ddmmyyyy))
-          .replace(PLACEHOLDERS.SHIFT, encodeURIComponent(shift ? shift.label : shiftKey))
-          .replace(PLACEHOLDERS.NAME, ""); // name left blank for the user to fill
-      }
-      return FORM_URL;
-    }
+    function render(offset = 0) {
+      const today = new Date();
+      const start = addDays(today, offset * 7);
 
-    // ============================
-    // Fetch signups from Google Sheet
-    // ============================
-    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${SHEET_GID}&tqx=out:json`;
-    const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/pub?gid=${SHEET_GID}&single=true&output=csv`;
+      const calendarEl = document.getElementById('calendar');
+      calendarEl.innerHTML = '';
 
-    async function fetchFromGViz(){
-      const res = await fetch(GVIZ_URL, { cache:'no-store' });
-      const text = await res.text();
-      const json = JSON.parse(text.replace(/^.*setResponse\(/, '').replace(/\);?\s*$/, ''));
-      const table = json.table;
-      const labels = (table.cols || []).map(c => (c && c.label ? c.label.toLowerCase().trim() : ''));
-      const idxName  = labels.findIndex(l => ["name","navn"].includes(l));
-      const idxDate  = labels.findIndex(l => ["date","dato"].includes(l));
-      const idxShift = labels.findIndex(l => ["shift","vakt"].includes(l));
-      const signups = {}; // { [dateISO]: { [shiftKey]: [names...] } }
-      for (const row of (table.rows || [])){
-        const c = row.c || [];
-        const name = c[idxName]?.v || c[idxName]?.f || '';
-        const rawDate = c[idxDate]?.v || c[idxDate]?.f || '';
-        const rawShift = c[idxShift]?.v || c[idxShift]?.f || '';
-        const dateISO = parseToISO(rawDate);
-        const shiftKey = normalizeShift(rawShift);
-        const cleanName = String(name).trim();
-        if (dateISO && shiftKey && cleanName){
-          (signups[dateISO] ||= {});
-          (signups[dateISO][shiftKey] ||= []);
-          if (!signups[dateISO][shiftKey].includes(cleanName)) signups[dateISO][shiftKey].push(cleanName);
-        }
-      }
-      return signups;
-    }
+      weekData = [];
+      for (let i = 0; i < 7; i++) {
+        const thisDay = addDays(start, i);
+        const dow = WEEKDAYS[thisDay.getDay()];
+        const label = fmt.format(thisDay);
+        const dateISO = thisDay.toISOString().slice(0,10);
 
-    async function fetchFromCSV(){
-      const res = await fetch(CSV_URL, { cache:'no-store' });
-      const text = await res.text();
-      // Simple CSV parse (no quotes handling edge cases). Expect headers: Name,Date,Shift (or Norwegian equivalents)
-      const rows = text.split(/\r?\n/).filter(Boolean).map(r => r.split(','));
-      const header = rows.shift().map(h => h.trim().toLowerCase());
-      const idxName  = header.findIndex(l => ["name","navn"].includes(l));
-      const idxDate  = header.findIndex(l => ["date","dato"].includes(l));
-      const idxShift = header.findIndex(l => ["shift","vakt"].includes(l));
-      const signups = {};
-      for (const r of rows){
-        const name = r[idxName] || '';
-        const rawDate = r[idxDate] || '';
-        const rawShift = r[idxShift] || '';
-        const dateISO = parseToISO(rawDate);
-        const shiftKey = normalizeShift(rawShift);
-        const cleanName = String(name).trim();
-        if (dateISO && shiftKey && cleanName){
-          (signups[dateISO] ||= {});
-          (signups[dateISO][shiftKey] ||= []);
-          if (!signups[dateISO][shiftKey].includes(cleanName)) signups[dateISO][shiftKey].push(cleanName);
-        }
-      }
-      return signups;
-    }
+        const col = document.createElement('article');
+        col.className = 'day-col';
+        if (i === 0 && offset === 0) col.classList.add('today');
 
-    async function fetchSignups(){
-      try {
-        return USE_GVIZ ? await fetchFromGViz() : await fetchFromCSV();
-      } catch (e){
-        showTip("Could not read the Google Sheet. Make sure it is public (Anyone with link: Viewer) or use File → Share → Publish to web. Also confirm the correct <code>SHEET_GID</code>.");
-        console.warn(e);
-        return {};
-      }
-    }
+        const head = document.createElement('div');
+        head.className = 'day-header';
+        head.innerHTML = `<div class="dow">${dow}</div><div class="date">${label}</div>`;
+        col.appendChild(head);
 
-    function showTip(html){
-      const el = document.getElementById('tips');
-      el.innerHTML = html; el.classList.remove('hidden');
-    }
+        const blocks = document.createElement('div');
+        blocks.className = 'blocks';
+        const shifts = getShifts(thisDay.getDay());
 
-    // ============================
-    // Render calendar
-    // ============================
-    function buildDayCard(dateObj, signups){
-      const dateISO = toISODate(dateObj);
-      const human = formatHuman(dateObj);
-      const shifts = shiftsForDate(dateObj);
-      const dayData = signups[dateISO] || {};
+        const dayInfo = { dateISO, dow, label, shifts: [] };
 
-      const wrap = document.createElement('article');
-      wrap.className = 'card rounded-2xl bg-white p-4';
-      wrap.innerHTML = `
-        <div class="flex items-baseline justify-between mb-3">
-          <div>
-            <div class="text-sm text-slate-500">${dateISO}</div>
-            <h3 class="text-lg font-semibold">${human}</h3>
-          </div>
-        </div>
-        <div class="space-y-3"></div>
-      `;
+        shifts.forEach(s => {
+          const block = document.createElement('div');
+          block.className = `shift ${s.type}`;
+          block.style.height = `${(s.hours / 24) * 100}%`;
+          block.dataset.date = dateISO;
+          block.dataset.shift = s.type;
 
-      const list = wrap.querySelector('.space-y-3');
-      shifts.forEach(shift => {
-        const id = `${dateISO}_${shift.key}`;
-        const names = dayData[shift.key] || [];
-        const link = buildFormURL(dateISO, shift.key);
+          const header = document.createElement('div');
+          header.className = 'shift-header';
+          header.innerHTML = `${s.name}<br>${s.start}–${s.end}`;
+          block.appendChild(header);
 
-        const el = document.createElement('div');
-        el.className = 'rounded-xl border border-slate-200 p-3';
-        el.innerHTML = `
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="font-medium">${shift.label} shift</div>
-              <div class="text-xs text-slate-500">${shift.time}</div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button class="text-xs px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200" data-copy="${link}">Copy link</button>
-              <a class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-white hover:opacity-90" href="${link}" target="_blank" rel="noopener">Open</a>
-              <div id="qr_${id}" class="w-[96px] h-[96px] border border-slate-200 rounded-lg overflow-hidden bg-white"></div>
-            </div>
-          </div>
-          <div class="mt-2 text-sm">
-            <div class="text-slate-500">Signed up:</div>
-            ${Array.isArray(names) && names.length ? `<ul class="mt-1 list-disc list-inside">${names.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '<div class="text-slate-400">(no one yet)</div>'}
-          </div>
-        `;
-        list.appendChild(el);
+          const list = document.createElement('div');
+          list.className = 'names-list';
+          renderNamesList(list, dateISO, s.type);
+          block.appendChild(list);
 
-        new QRCode(document.getElementById(`qr_${id}`), {
-          text: link,
-          width: 96,
-          height: 96,
-          correctLevel: QRCode.CorrectLevel.M,
+          blocks.appendChild(block);
+
+          dayInfo.shifts.push({ type: s.type, name: s.name, time: `${s.start}–${s.end}` });
         });
+
+        col.appendChild(blocks);
+        calendarEl.appendChild(col);
+        weekData.push(dayInfo);
+      }
+
+      const range = document.getElementById('range');
+      range.textContent = `${fmtShort.format(start)} – ${fmt.format(addDays(start,6))}`;
+    }
+
+    // Controls
+    document.getElementById('prev').addEventListener('click', () => { render(-1); });
+    document.getElementById('next').addEventListener('click', () => { render(1); });
+    document.getElementById('today').addEventListener('click', () => { render(0); });
+
+    // --- Signup modal logic ---
+    const modal = document.getElementById('signupModal');
+    const choicesEl = document.getElementById('choices');
+    const nameInput = document.getElementById('nameInput');
+
+    function openSignupModal() {
+      // Build checkbox list from weekData
+      choicesEl.innerHTML = '';
+      weekData.forEach(day => {
+        const group = document.createElement('div');
+        group.className = 'day-group';
+        const title = document.createElement('div');
+        title.className = 'day-title';
+        title.textContent = `${day.dow} — ${day.label}`;
+        group.appendChild(title);
+
+        day.shifts.forEach(s => {
+          const id = `${day.dateISO}-${s.type}`;
+          const row = document.createElement('label');
+          row.className = 'choice';
+          row.innerHTML = `<input type="checkbox" value="${id}"> <span>${s.name} (${s.time})</span>`;
+          group.appendChild(row);
+        });
+
+        choicesEl.appendChild(group);
       });
 
-      return wrap;
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      setTimeout(() => nameInput.focus(), 0);
+    }
+    function closeSignupModal() {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
     }
 
-    async function renderCalendar(){
-      const root = document.getElementById('calendar');
-      root.innerHTML = '';
-      const signups = await fetchSignups();
-      getNext7Days().forEach(d => root.appendChild(buildDayCard(d, signups)));
-      attachCopyHandlers();
-    }
+    document.getElementById('signupBtn').addEventListener('click', openSignupModal);
+    document.getElementById('closeModal').addEventListener('click', closeSignupModal);
+    document.getElementById('cancelBtn').addEventListener('click', closeSignupModal);
 
-    function attachCopyHandlers(){
-      document.querySelectorAll('[data-copy]').forEach(btn => {
-        btn.addEventListener('click', async ()=>{
-          const url = btn.getAttribute('data-copy');
-          try { await navigator.clipboard.writeText(url); const t=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1200); }
-          catch { alert('Copy failed. URL: '+url); }
-        });
+    document.getElementById('submitSignup').addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      const checks = choicesEl.querySelectorAll('input[type="checkbox"]:checked');
+      if (!checks.length) return;
+
+      checks.forEach(ch => {
+        const [dateISO, shiftType] = ch.value.split('-');
+        const arr = loadNames(dateISO, shiftType);
+        if (!arr.includes(name)) arr.push(name);
+        saveNames(dateISO, shiftType, arr);
       });
-    }
 
-    // ============================
-    // Init
-    // ============================
-    document.getElementById('refreshBtn').addEventListener('click', renderCalendar);
-    document.getElementById('shareBtn').addEventListener('click', async ()=>{
-      try { await navigator.clipboard.writeText(location.href.split('?')[0]); alert('Copied page link'); } catch { alert('Copy failed'); }
+      // Update visible lists without full re-render
+      document.querySelectorAll('.shift').forEach(el => {
+        const dateISO = el.dataset.date; const shiftType = el.dataset.shift;
+        const list = el.querySelector('.names-list');
+        if (list) renderNamesList(list, dateISO, shiftType);
+      });
+
+      nameInput.value = '';
+      closeSignupModal();
     });
 
-    renderCalendar();
+    // Initial render
+    render(0);
   </script>
-
-  <!--
-  ==========================================
-  📌 Deploy to GitHub Pages (no build tools)
-  ==========================================
-  1) Put this file in a repo as index.html
-  2) Settings → Pages → Deploy from branch
-  3) Open the live URL. It works on phones & desktop.
-
-  ✅ Make sure the Sheet is readable
-  - Share the sheet: Anyone with the link → Viewer, OR
-  - File → Share → Publish to web (then USE_GVIZ=false to fetch CSV)
-
-  ✅ Optional: true pre‑filled Form URLs
-  - Create a pre‑filled link (⋮ → Get pre‑filled link). Use placeholders like __NAME__, 01/01/2030, __SHIFT__.
-  - Paste into PREFILLED_TEMPLATE to auto-fill date/shift in the form opened by the QR.
-  -->
 </body>
 </html>
