@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>7‑Day Work Shift Calendar</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="description" content="A clean 7‑day work calendar with QR sign‑ups. Mon–Thu: 3×8h, Fri–Sun: 2×12h. LocalStorage backend. Ready for GitHub Pages." />
+  <meta name="description" content="7‑day work calendar with QR signup via Google Form and live names from Google Sheet. No local storage. Mobile friendly. Ready for GitHub Pages." />
   <style>
     html, body { height: 100%; }
     .card { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
@@ -17,115 +17,185 @@
       <h1 class="text-2xl font-semibold">7‑Day Work Shift Calendar</h1>
       <nav class="flex items-center gap-2 text-sm">
         <button id="refreshBtn" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:opacity-90">Refresh</button>
-        <button id="exportBtn" class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300">Export JSON</button>
-        <label class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 cursor-pointer">
-          Import JSON
-          <input id="importInput" type="file" accept="application/json" class="hidden" />
-        </label>
-        <button id="clearBtn" class="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200" title="Local device only">Reset</button>
+        <button id="shareBtn" class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300">Copy page link</button>
       </nav>
     </div>
   </header>
 
   <main class="max-w-6xl mx-auto px-4 py-6">
-    <p class="text-sm text-slate-600 mb-4">Scan a QR to open a quick signup on your phone. This fresh build stores signups in <strong>localStorage</strong> (works instantly, no server). You can export/import JSON to share across devices. Later, you can plug into a Google Form/Sheet if you want multi‑device sync.</p>
+    <section id="tips" class="hidden mb-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 p-4 text-sm"></section>
+    <section class="mb-6 text-sm text-slate-600">
+      <p>This version works fully online: QR codes open your form; names are read live from your Google Sheet. No local storage. Phones and desktop supported.</p>
+    </section>
+
     <section id="calendar" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></section>
   </main>
 
-  <!-- Signup modal (query‑driven: ?date=YYYY-MM-DD&shift=key) -->
-  <div id="signupOverlay" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4">
-    <div class="card w-full max-w-md rounded-2xl bg-white p-6">
-      <div class="flex items-start justify-between mb-4">
-        <h2 class="text-xl font-semibold">Quick Signup</h2>
-        <button id="closeSignup" class="text-slate-500 hover:text-slate-700" aria-label="Close">✕</button>
-      </div>
-      <form id="signupForm" class="space-y-4">
-        <div>
-          <label class="text-sm text-slate-600">Date</label>
-          <div id="signupDate" class="font-medium"></div>
-        </div>
-        <div>
-          <label class="text-sm text-slate-600">Shift</label>
-          <div id="signupShift" class="font-medium"></div>
-        </div>
-        <div>
-          <label for="name" class="block text-sm mb-1">Your name</label>
-          <input id="name" name="name" required placeholder="e.g., Alex Jensen" class="w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400" />
-        </div>
-        <div class="flex items-center gap-3">
-          <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:opacity-90">Sign up</button>
-          <button type="button" id="backToCalendar" class="text-slate-600 hover:text-slate-800">Back</button>
-        </div>
-        <p id="signupMsg" class="text-sm text-emerald-700 hidden">Signed up! You can close this and return to the calendar.</p>
-      </form>
-    </div>
-  </div>
-
-  <!-- QRCode lib -->
+  <!-- QRCode library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-Mn6G2P0CBN1VYcFv9Jr8kZzuWCFdYbQOqXgQYzqU8W0nI/W2cs8s3kA3+1a9C3b5x7E1F3vJ9Eo0v4C2Qb9u0w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
-    // ==========================
-    // Config & shift definitions
-    // ==========================
-    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    // ============================
+    // CONFIG — replace these with your own
+    // ============================
+    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo';
 
-    // Mon–Thu: 3 × 8h
+    // 1) Google Form URL to open from QR (plain view link is fine). If you have a pre‑filled template, paste that here instead.
+    //    If you paste a true pre‑filled template that contains placeholders or entry.x ids, the app will try to fill date/shift.
+    const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfhxqHshc0-MtuAReM5JOyxdXpuj_S6CZvOPgcKVuV2HlzVfQ/viewform?usp=pp_url";
+
+    // 2) Google Sheet (Responses) — make it public (Anyone with link: Viewer) or File → Share → Publish to web
+    //    Use your Sheet ID and the tab gid that contains responses.
+    const SHEET_ID = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4_xMK3RWlxzpArD6Dv_98Y5cQVwOIH4Uj-wxL2v3sISD7YAD_WOBgA5rtRrBrAsG8Unna9NsqAGuk/pubhtml"; // change if different
+    const SHEET_GID = "0"; // change if your responses tab is not gid=0
+
+    // If you PUBLISH the sheet, you can also use the CSV endpoint below (often a bit faster):
+    const USE_GVIZ = true; // set false to use published CSV endpoint
+
+    // Optional: If you created a genuine pre‑filled template with placeholders, set them here so we can swap values.
+    // Example placeholders you used while generating the pre‑filled link: __NAME__, 01/01/2030, __SHIFT__
+    const PREFILLED_TEMPLATE = ""; // paste your pre‑filled template URL (with placeholders) if you have one
+    const PLACEHOLDERS = { NAME: "__NAME__", DATE: "01/01/2030", SHIFT: "__SHIFT__" };
+
+    // ============================
+    // Shift definitions
+    // ============================
     const SHIFTS_MON_THU = [
-      { key: 'day', label: 'Day', time: '08:00–16:00' },
-      { key: 'afternoon', label: 'Afternoon', time: '16:00–00:00' },
-      { key: 'night', label: 'Night', time: '00:00–08:00' },
+      { key: 'day', label: 'Day', time: '07:00–15:00' },
+      { key: 'afternoon', label: 'Afternoon', time: '15:00–23:00' },
+      { key: 'night', label: 'Night', time: '23:00–07:00' },
     ];
-    // Fri–Sun: 2 × 12h
     const SHIFTS_FRI_SUN = [
       { key: 'day', label: 'Day', time: '08:00–20:00' },
       { key: 'night', label: 'Night', time: '20:00–08:00' },
     ];
 
-    // ==========================
-    // Storage (local)
-    // { [dateISO]: { [shiftKey]: [names...] } }
-    // ==========================
-    const STORAGE_KEY = 'shift-signups-fresh-v1';
-    const readStore = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } };
-    const writeStore = (d) => localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
-
-    function addSignup(dateISO, shiftKey, name){
-      const data = readStore();
-      data[dateISO] ||= {};
-      data[dateISO][shiftKey] ||= [];
-      if (!data[dateISO][shiftKey].includes(name)){
-        data[dateISO][shiftKey].push(name);
-        writeStore(data);
-      }
-      return data;
-    }
-
-    // ==========================
-    // Utilities
-    // ==========================
+    // ============================
+    // Helpers
+    // ============================
     const pad = n => (n < 10 ? '0' + n : '' + n);
     const toISODate = d => [d.getFullYear(), pad(d.getMonth()+1), pad(d.getDate())].join('-');
     const formatHuman = d => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', timeZone: TIMEZONE }).format(d);
     const getNext7Days = () => Array.from({length:7}, (_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
     const shiftsForDate = d => ([1,2,3,4].includes(d.getDay()) ? SHIFTS_MON_THU : SHIFTS_FRI_SUN);
 
-    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    function toDDMMYYYY(dateISO){ const [y,m,d]=dateISO.split('-'); return `${d}/${m}/${y}`; }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
-    function signupURL(dateISO, shiftKey){
-      const base = window.location.origin + window.location.pathname;
-      const q = new URLSearchParams({ date: dateISO, shift: shiftKey });
-      return `${base}?${q.toString()}`;
+    function normalizeShift(value){
+      const v = String(value||'').trim().toLowerCase();
+      if (["day","dag","dagvakt"].includes(v)) return 'day';
+      if (["afternoon","evening","ettermiddag","aft"].includes(v)) return 'afternoon';
+      if (["night","natt","nightshift"].includes(v)) return 'night';
+      return null;
     }
 
-    // ==========================
-    // Rendering
-    // ==========================
-    function buildDayCard(dateObj){
+    function parseToISO(mixed){
+      if (!mixed) return null; const s = String(mixed).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // YYYY-MM-DD
+      let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // DD/MM/YYYY
+      if (m) { const [_,d,mo,y]=m; return `${y}-${pad(+mo)}-${pad(+d)}`; }
+      m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/); // DD.MM.YYYY
+      if (m) { const [_,d,mo,y]=m; return `${y}-${pad(+mo)}-${pad(+d)}`; }
+      const dt = new Date(s); if (!isNaN(dt)) return toISODate(dt);
+      return null;
+    }
+
+    function buildFormURL(dateISO, shiftKey){
+      // If a proper pre‑filled template exists, fill it; otherwise just use FORM_URL
+      if (PREFILLED_TEMPLATE && /__SHIFT__|01\/01\/2030|entry\./.test(PREFILLED_TEMPLATE)){
+        const shift = (SHIFTS_MON_THU.concat(SHIFTS_FRI_SUN)).find(s=>s.key===shiftKey);
+        const ddmmyyyy = toDDMMYYYY(dateISO);
+        return PREFILLED_TEMPLATE
+          .replace(PLACEHOLDERS.DATE, encodeURIComponent(ddmmyyyy))
+          .replace(PLACEHOLDERS.SHIFT, encodeURIComponent(shift ? shift.label : shiftKey))
+          .replace(PLACEHOLDERS.NAME, ""); // name left blank for the user to fill
+      }
+      return FORM_URL;
+    }
+
+    // ============================
+    // Fetch signups from Google Sheet
+    // ============================
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${SHEET_GID}&tqx=out:json`;
+    const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/pub?gid=${SHEET_GID}&single=true&output=csv`;
+
+    async function fetchFromGViz(){
+      const res = await fetch(GVIZ_URL, { cache:'no-store' });
+      const text = await res.text();
+      const json = JSON.parse(text.replace(/^.*setResponse\(/, '').replace(/\);?\s*$/, ''));
+      const table = json.table;
+      const labels = (table.cols || []).map(c => (c && c.label ? c.label.toLowerCase().trim() : ''));
+      const idxName  = labels.findIndex(l => ["name","navn"].includes(l));
+      const idxDate  = labels.findIndex(l => ["date","dato"].includes(l));
+      const idxShift = labels.findIndex(l => ["shift","vakt"].includes(l));
+      const signups = {}; // { [dateISO]: { [shiftKey]: [names...] } }
+      for (const row of (table.rows || [])){
+        const c = row.c || [];
+        const name = c[idxName]?.v || c[idxName]?.f || '';
+        const rawDate = c[idxDate]?.v || c[idxDate]?.f || '';
+        const rawShift = c[idxShift]?.v || c[idxShift]?.f || '';
+        const dateISO = parseToISO(rawDate);
+        const shiftKey = normalizeShift(rawShift);
+        const cleanName = String(name).trim();
+        if (dateISO && shiftKey && cleanName){
+          (signups[dateISO] ||= {});
+          (signups[dateISO][shiftKey] ||= []);
+          if (!signups[dateISO][shiftKey].includes(cleanName)) signups[dateISO][shiftKey].push(cleanName);
+        }
+      }
+      return signups;
+    }
+
+    async function fetchFromCSV(){
+      const res = await fetch(CSV_URL, { cache:'no-store' });
+      const text = await res.text();
+      // Simple CSV parse (no quotes handling edge cases). Expect headers: Name,Date,Shift (or Norwegian equivalents)
+      const rows = text.split(/\r?\n/).filter(Boolean).map(r => r.split(','));
+      const header = rows.shift().map(h => h.trim().toLowerCase());
+      const idxName  = header.findIndex(l => ["name","navn"].includes(l));
+      const idxDate  = header.findIndex(l => ["date","dato"].includes(l));
+      const idxShift = header.findIndex(l => ["shift","vakt"].includes(l));
+      const signups = {};
+      for (const r of rows){
+        const name = r[idxName] || '';
+        const rawDate = r[idxDate] || '';
+        const rawShift = r[idxShift] || '';
+        const dateISO = parseToISO(rawDate);
+        const shiftKey = normalizeShift(rawShift);
+        const cleanName = String(name).trim();
+        if (dateISO && shiftKey && cleanName){
+          (signups[dateISO] ||= {});
+          (signups[dateISO][shiftKey] ||= []);
+          if (!signups[dateISO][shiftKey].includes(cleanName)) signups[dateISO][shiftKey].push(cleanName);
+        }
+      }
+      return signups;
+    }
+
+    async function fetchSignups(){
+      try {
+        return USE_GVIZ ? await fetchFromGViz() : await fetchFromCSV();
+      } catch (e){
+        showTip("Could not read the Google Sheet. Make sure it is public (Anyone with link: Viewer) or use File → Share → Publish to web. Also confirm the correct <code>SHEET_GID</code>.");
+        console.warn(e);
+        return {};
+      }
+    }
+
+    function showTip(html){
+      const el = document.getElementById('tips');
+      el.innerHTML = html; el.classList.remove('hidden');
+    }
+
+    // ============================
+    // Render calendar
+    // ============================
+    function buildDayCard(dateObj, signups){
       const dateISO = toISODate(dateObj);
       const human = formatHuman(dateObj);
       const shifts = shiftsForDate(dateObj);
-      const dayData = readStore()[dateISO] || {};
+      const dayData = signups[dateISO] || {};
 
       const wrap = document.createElement('article');
       wrap.className = 'card rounded-2xl bg-white p-4';
@@ -140,11 +210,10 @@
       `;
 
       const list = wrap.querySelector('.space-y-3');
-
       shifts.forEach(shift => {
         const id = `${dateISO}_${shift.key}`;
         const names = dayData[shift.key] || [];
-        const link = signupURL(dateISO, shift.key);
+        const link = buildFormURL(dateISO, shift.key);
 
         const el = document.createElement('div');
         el.className = 'rounded-xl border border-slate-200 p-3';
@@ -156,13 +225,13 @@
             </div>
             <div class="flex items-center gap-2">
               <button class="text-xs px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200" data-copy="${link}">Copy link</button>
-              <a class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-white hover:opacity-90" href="${link}">Open</a>
+              <a class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-white hover:opacity-90" href="${link}" target="_blank" rel="noopener">Open</a>
               <div id="qr_${id}" class="w-[96px] h-[96px] border border-slate-200 rounded-lg overflow-hidden bg-white"></div>
             </div>
           </div>
           <div class="mt-2 text-sm">
             <div class="text-slate-500">Signed up:</div>
-            ${names.length ? `<ul class="mt-1 list-disc list-inside">${names.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '<div class="text-slate-400">(no one yet)</div>'}
+            ${Array.isArray(names) && names.length ? `<ul class="mt-1 list-disc list-inside">${names.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '<div class="text-slate-400">(no one yet)</div>'}
           </div>
         `;
         list.appendChild(el);
@@ -178,10 +247,11 @@
       return wrap;
     }
 
-    function renderCalendar(){
+    async function renderCalendar(){
       const root = document.getElementById('calendar');
       root.innerHTML = '';
-      getNext7Days().forEach(d => root.appendChild(buildDayCard(d)));
+      const signups = await fetchSignups();
+      getNext7Days().forEach(d => root.appendChild(buildDayCard(d, signups)));
       attachCopyHandlers();
     }
 
@@ -195,97 +265,32 @@
       });
     }
 
-    // ==========================
-    // Modal (URL‑driven)
-    // ==========================
-    const qs = () => Object.fromEntries(new URLSearchParams(location.search).entries());
-    function showSignup(dateISO, shiftKey){
-      document.getElementById('signupDate').textContent = dateISO;
-      const shift = [...SHIFTS_MON_THU, ...SHIFTS_FRI_SUN].find(s=>s.key===shiftKey);
-      document.getElementById('signupShift').textContent = shift ? `${shift.label} (${shift.time})` : shiftKey;
-      document.getElementById('signupOverlay').classList.remove('hidden');
-      document.getElementById('name').focus();
-    }
-    function hideSignup(){
-      document.getElementById('signupOverlay').classList.add('hidden');
-      const base = window.location.origin + window.location.pathname;
-      history.replaceState({}, '', base);
-    }
-
-    document.getElementById('closeSignup').addEventListener('click', hideSignup);
-    document.getElementById('backToCalendar').addEventListener('click', hideSignup);
-
-    document.getElementById('signupForm').addEventListener('submit', (e)=>{
-      e.preventDefault();
-      const { date, shift } = qs();
-      const name = document.getElementById('name').value.trim();
-      if (!date || !shift || !name) return;
-      addSignup(date, shift, name);
-      document.getElementById('signupMsg').classList.remove('hidden');
-      setTimeout(()=>{ hideSignup(); renderCalendar(); }, 600);
-    });
-
-    // ==========================
-    // Export / Import / Reset
-    // ==========================
-    document.getElementById('exportBtn').addEventListener('click', ()=>{
-      const data = readStore();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'shift-signups.json'; a.click();
-      setTimeout(()=>URL.revokeObjectURL(url), 500);
-    });
-
-    document.getElementById('importInput').addEventListener('change', (e)=>{
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const json = JSON.parse(reader.result);
-          if (typeof json === 'object' && json){ writeStore(json); renderCalendar(); alert('Imported.'); }
-          else alert('Invalid JSON file.');
-        } catch { alert('Invalid JSON file.'); }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
-    });
-
-    document.getElementById('clearBtn').addEventListener('click', ()=>{
-      if (confirm('Clear all local signups on this device?')){
-        localStorage.removeItem(STORAGE_KEY);
-        renderCalendar();
-      }
-    });
-
-    // ==========================
+    // ============================
     // Init
-    // ==========================
+    // ============================
     document.getElementById('refreshBtn').addEventListener('click', renderCalendar);
-    function init(){
-      renderCalendar();
-      const p = qs();
-      if (p.date && p.shift) showSignup(p.date, p.shift);
-    }
-    init();
+    document.getElementById('shareBtn').addEventListener('click', async ()=>{
+      try { await navigator.clipboard.writeText(location.href.split('?')[0]); alert('Copied page link'); } catch { alert('Copy failed'); }
+    });
+
+    renderCalendar();
   </script>
 
   <!--
-  =============================
-  📌 HOW TO DEPLOY (GitHub Pages)
-  =============================
-  1) Create a repo and save this file as index.html
-  2) GitHub → Settings → Pages → Deploy from branch
-  3) Open the live URL. Done.
+  ==========================================
+  📌 Deploy to GitHub Pages (no build tools)
+  ==========================================
+  1) Put this file in a repo as index.html
+  2) Settings → Pages → Deploy from branch
+  3) Open the live URL. It works on phones & desktop.
 
-  🧩 How it works
-  • Each shift card has a QR linking to this page with ?date=YYYY-MM-DD&shift=key
-  • Scanning opens a small signup modal; names are saved per device (localStorage)
-  • Export/Import JSON to share data across devices (manual method)
+  ✅ Make sure the Sheet is readable
+  - Share the sheet: Anyone with the link → Viewer, OR
+  - File → Share → Publish to web (then USE_GVIZ=false to fetch CSV)
 
-  🚀 Optional next steps
-  • Replace localStorage with Google Form + Google Sheet (multi-device). I can add that later.
-  • Add capacity limits per shift, admin pin to remove names, etc.
+  ✅ Optional: true pre‑filled Form URLs
+  - Create a pre‑filled link (⋮ → Get pre‑filled link). Use placeholders like __NAME__, 01/01/2030, __SHIFT__.
+  - Paste into PREFILLED_TEMPLATE to auto-fill date/shift in the form opened by the QR.
   -->
 </body>
 </html>
