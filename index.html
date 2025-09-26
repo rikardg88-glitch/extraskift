@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>7‑Day Work Shift Calendar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="description" content="A clean 7‑day work calendar with QR sign‑ups. Mon–Thu: 3×8h, Fri–Sun: 2×12h. LocalStorage backend. Ready for GitHub Pages." />
+  <style>
+    html, body { height: 100%; }
+    .card { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body class="min-h-full bg-slate-50 text-slate-800">
+  <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-2xl font-semibold">7‑Day Work Shift Calendar</h1>
+      <nav class="flex items-center gap-2 text-sm">
+        <button id="refreshBtn" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:opacity-90">Refresh</button>
+        <button id="exportBtn" class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300">Export JSON</button>
+        <label class="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 cursor-pointer">
+          Import JSON
+          <input id="importInput" type="file" accept="application/json" class="hidden" />
+        </label>
+        <button id="clearBtn" class="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200" title="Local device only">Reset</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <p class="text-sm text-slate-600 mb-4">Scan a QR to open a quick signup on your phone. This fresh build stores signups in <strong>localStorage</strong> (works instantly, no server). You can export/import JSON to share across devices. Later, you can plug into a Google Form/Sheet if you want multi‑device sync.</p>
+    <section id="calendar" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></section>
+  </main>
+
+  <!-- Signup modal (query‑driven: ?date=YYYY-MM-DD&shift=key) -->
+  <div id="signupOverlay" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4">
+    <div class="card w-full max-w-md rounded-2xl bg-white p-6">
+      <div class="flex items-start justify-between mb-4">
+        <h2 class="text-xl font-semibold">Quick Signup</h2>
+        <button id="closeSignup" class="text-slate-500 hover:text-slate-700" aria-label="Close">✕</button>
+      </div>
+      <form id="signupForm" class="space-y-4">
+        <div>
+          <label class="text-sm text-slate-600">Date</label>
+          <div id="signupDate" class="font-medium"></div>
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Shift</label>
+          <div id="signupShift" class="font-medium"></div>
+        </div>
+        <div>
+          <label for="name" class="block text-sm mb-1">Your name</label>
+          <input id="name" name="name" required placeholder="e.g., Alex Jensen" class="w-full rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400" />
+        </div>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:opacity-90">Sign up</button>
+          <button type="button" id="backToCalendar" class="text-slate-600 hover:text-slate-800">Back</button>
+        </div>
+        <p id="signupMsg" class="text-sm text-emerald-700 hidden">Signed up! You can close this and return to the calendar.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- QRCode lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-Mn6G2P0CBN1VYcFv9Jr8kZzuWCFdYbQOqXgQYzqU8W0nI/W2cs8s3kA3+1a9C3b5x7E1F3vJ9Eo0v4C2Qb9u0w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    // ==========================
+    // Config & shift definitions
+    // ==========================
+    const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+    // Mon–Thu: 3 × 8h
+    const SHIFTS_MON_THU = [
+      { key: 'day', label: 'Day', time: '08:00–16:00' },
+      { key: 'afternoon', label: 'Afternoon', time: '16:00–00:00' },
+      { key: 'night', label: 'Night', time: '00:00–08:00' },
+    ];
+    // Fri–Sun: 2 × 12h
+    const SHIFTS_FRI_SUN = [
+      { key: 'day', label: 'Day', time: '08:00–20:00' },
+      { key: 'night', label: 'Night', time: '20:00–08:00' },
+    ];
+
+    // ==========================
+    // Storage (local)
+    // { [dateISO]: { [shiftKey]: [names...] } }
+    // ==========================
+    const STORAGE_KEY = 'shift-signups-fresh-v1';
+    const readStore = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } };
+    const writeStore = (d) => localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+
+    function addSignup(dateISO, shiftKey, name){
+      const data = readStore();
+      data[dateISO] ||= {};
+      data[dateISO][shiftKey] ||= [];
+      if (!data[dateISO][shiftKey].includes(name)){
+        data[dateISO][shiftKey].push(name);
+        writeStore(data);
+      }
+      return data;
+    }
+
+    // ==========================
+    // Utilities
+    // ==========================
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    const toISODate = d => [d.getFullYear(), pad(d.getMonth()+1), pad(d.getDate())].join('-');
+    const formatHuman = d => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', timeZone: TIMEZONE }).format(d);
+    const getNext7Days = () => Array.from({length:7}, (_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
+    const shiftsForDate = d => ([1,2,3,4].includes(d.getDay()) ? SHIFTS_MON_THU : SHIFTS_FRI_SUN);
+
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+    function signupURL(dateISO, shiftKey){
+      const base = window.location.origin + window.location.pathname;
+      const q = new URLSearchParams({ date: dateISO, shift: shiftKey });
+      return `${base}?${q.toString()}`;
+    }
+
+    // ==========================
+    // Rendering
+    // ==========================
+    function buildDayCard(dateObj){
+      const dateISO = toISODate(dateObj);
+      const human = formatHuman(dateObj);
+      const shifts = shiftsForDate(dateObj);
+      const dayData = readStore()[dateISO] || {};
+
+      const wrap = document.createElement('article');
+      wrap.className = 'card rounded-2xl bg-white p-4';
+      wrap.innerHTML = `
+        <div class="flex items-baseline justify-between mb-3">
+          <div>
+            <div class="text-sm text-slate-500">${dateISO}</div>
+            <h3 class="text-lg font-semibold">${human}</h3>
+          </div>
+        </div>
+        <div class="space-y-3"></div>
+      `;
+
+      const list = wrap.querySelector('.space-y-3');
+
+      shifts.forEach(shift => {
+        const id = `${dateISO}_${shift.key}`;
+        const names = dayData[shift.key] || [];
+        const link = signupURL(dateISO, shift.key);
+
+        const el = document.createElement('div');
+        el.className = 'rounded-xl border border-slate-200 p-3';
+        el.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-medium">${shift.label} shift</div>
+              <div class="text-xs text-slate-500">${shift.time}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="text-xs px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200" data-copy="${link}">Copy link</button>
+              <a class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-white hover:opacity-90" href="${link}">Open</a>
+              <div id="qr_${id}" class="w-[96px] h-[96px] border border-slate-200 rounded-lg overflow-hidden bg-white"></div>
+            </div>
+          </div>
+          <div class="mt-2 text-sm">
+            <div class="text-slate-500">Signed up:</div>
+            ${names.length ? `<ul class="mt-1 list-disc list-inside">${names.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '<div class="text-slate-400">(no one yet)</div>'}
+          </div>
+        `;
+        list.appendChild(el);
+
+        new QRCode(document.getElementById(`qr_${id}`), {
+          text: link,
+          width: 96,
+          height: 96,
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      });
+
+      return wrap;
+    }
+
+    function renderCalendar(){
+      const root = document.getElementById('calendar');
+      root.innerHTML = '';
+      getNext7Days().forEach(d => root.appendChild(buildDayCard(d)));
+      attachCopyHandlers();
+    }
+
+    function attachCopyHandlers(){
+      document.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', async ()=>{
+          const url = btn.getAttribute('data-copy');
+          try { await navigator.clipboard.writeText(url); const t=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1200); }
+          catch { alert('Copy failed. URL: '+url); }
+        });
+      });
+    }
+
+    // ==========================
+    // Modal (URL‑driven)
+    // ==========================
+    const qs = () => Object.fromEntries(new URLSearchParams(location.search).entries());
+    function showSignup(dateISO, shiftKey){
+      document.getElementById('signupDate').textContent = dateISO;
+      const shift = [...SHIFTS_MON_THU, ...SHIFTS_FRI_SUN].find(s=>s.key===shiftKey);
+      document.getElementById('signupShift').textContent = shift ? `${shift.label} (${shift.time})` : shiftKey;
+      document.getElementById('signupOverlay').classList.remove('hidden');
+      document.getElementById('name').focus();
+    }
+    function hideSignup(){
+      document.getElementById('signupOverlay').classList.add('hidden');
+      const base = window.location.origin + window.location.pathname;
+      history.replaceState({}, '', base);
+    }
+
+    document.getElementById('closeSignup').addEventListener('click', hideSignup);
+    document.getElementById('backToCalendar').addEventListener('click', hideSignup);
+
+    document.getElementById('signupForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const { date, shift } = qs();
+      const name = document.getElementById('name').value.trim();
+      if (!date || !shift || !name) return;
+      addSignup(date, shift, name);
+      document.getElementById('signupMsg').classList.remove('hidden');
+      setTimeout(()=>{ hideSignup(); renderCalendar(); }, 600);
+    });
+
+    // ==========================
+    // Export / Import / Reset
+    // ==========================
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const data = readStore();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'shift-signups.json'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 500);
+    });
+
+    document.getElementById('importInput').addEventListener('change', (e)=>{
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const json = JSON.parse(reader.result);
+          if (typeof json === 'object' && json){ writeStore(json); renderCalendar(); alert('Imported.'); }
+          else alert('Invalid JSON file.');
+        } catch { alert('Invalid JSON file.'); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', ()=>{
+      if (confirm('Clear all local signups on this device?')){
+        localStorage.removeItem(STORAGE_KEY);
+        renderCalendar();
+      }
+    });
+
+    // ==========================
+    // Init
+    // ==========================
+    document.getElementById('refreshBtn').addEventListener('click', renderCalendar);
+    function init(){
+      renderCalendar();
+      const p = qs();
+      if (p.date && p.shift) showSignup(p.date, p.shift);
+    }
+    init();
+  </script>
+
+  <!--
+  =============================
+  📌 HOW TO DEPLOY (GitHub Pages)
+  =============================
+  1) Create a repo and save this file as index.html
+  2) GitHub → Settings → Pages → Deploy from branch
+  3) Open the live URL. Done.
+
+  🧩 How it works
+  • Each shift card has a QR linking to this page with ?date=YYYY-MM-DD&shift=key
+  • Scanning opens a small signup modal; names are saved per device (localStorage)
+  • Export/Import JSON to share data across devices (manual method)
+
+  🚀 Optional next steps
+  • Replace localStorage with Google Form + Google Sheet (multi-device). I can add that later.
+  • Add capacity limits per shift, admin pin to remove names, etc.
+  -->
+</body>
+</html>
