@@ -31,7 +31,8 @@
     .blocks { position: relative; height: 560px; display: flex; flex-direction: column; }
     .shift { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: center; padding: 4px; overflow: hidden; }
     .shift-header { font-weight: 800; font-size: 12px; color: #0b1320; text-shadow: 0 1px 0 rgb(255 255 255 / .35); margin-bottom: 4px; }
-    .names-list { text-align: left; background: rgb(255 255 255 / 0.35); border-radius: 8px; padding: 4px; min-height: 40px; font-size: 12px; color: #0b1320; }
+    .names-list { text-align: left; background: rgb(255 255 255 / 0.35); border-radius: 8px; padding: 6px 6px 4px; min-height: 40px; font-size: 13px; font-weight: 800; color: #0b1320; line-height: 1.25; }
+    .names-list .name { display: block; }
     .shift.day { background: var(--day); }
     .shift.evening { background: var(--evening); }
     .shift.night { background: var(--night); }
@@ -138,7 +139,7 @@
     function renderNamesList(container, dateISO, shiftType) {
       const names = loadNames(dateISO, shiftType);
       if (!names.length) { container.innerHTML = '<em>No sign-ups yet</em>'; return; }
-      container.innerHTML = names.map(n => `<div>• ${n}</div>`).join('');
+      container.innerHTML = names.map(n => `<span class="name">• ${n}</span>`).join('');
     }
 
     function render(offset = 0) {
@@ -223,7 +224,7 @@
         group.appendChild(title);
 
         day.shifts.forEach(s => {
-          const id = `${day.dateISO}-${s.type}`;
+          const id = `${day.dateISO}|${s.type}`;
           const row = document.createElement('label');
           row.className = 'choice';
           row.innerHTML = `<input type="checkbox" value="${id}"> <span>${s.name} (${s.time})</span>`;
@@ -252,20 +253,20 @@
       const checks = choicesEl.querySelectorAll('input[type="checkbox"]:checked');
       if (!checks.length) return;
 
-      // Apply to each selected shift
+      // Apply to each selected shift (unique per shift)
       const updates = [];
       checks.forEach(ch => {
-        const [dateISO, shiftType] = ch.value.split('-');
+        const [dateISO, shiftType] = ch.value.split('|');
         const arr = loadNames(dateISO, shiftType);
         if (!arr.includes(name)) arr.push(name);
         saveNames(dateISO, shiftType, arr);
         updates.push({ dateISO, shiftType, arr });
       });
 
-      // Update visible lists without relying on storage reads (works in sandbox/private mode)
+      // Update visible lists instantly
       updates.forEach(({ dateISO, shiftType, arr }) => {
         document.querySelectorAll(`.shift[data-date="${dateISO}"][data-shift="${shiftType}"] .names-list`).forEach(list => {
-          list.innerHTML = arr.length ? arr.map(n => `• ${n}`).join('<br>') : '<em>No sign-ups yet</em>';
+          list.innerHTML = arr.length ? arr.map(n => `<span class=\"name\">• ${n}</span>`).join('') : '<em>No sign-ups yet</em>';
         });
       });
 
@@ -277,29 +278,21 @@
     render(0);
 
     // -----------------
-    // Basic sanity tests
+    // Basic sanity tests (console)
     // -----------------
     (function runTests(){
       try {
         console.groupCollapsed('%cShift Calendar Tests','color:#10b981');
-        // getShifts returns weekday pattern for Mon-Thu (1..4) and weekend otherwise
         console.assert(getShifts(1).length === 3 && getShifts(4).length === 3, 'Weekday shifts should be 3 blocks');
         console.assert(getShifts(0).length === 2 && getShifts(6).length === 2, 'Weekend shifts should be 2 blocks');
-
-        // Render created 7 columns
-        const cols = document.querySelectorAll('.day-col').length;
-        console.assert(cols === 7, 'Should render 7 day columns, got '+cols);
-
-        // Storage roundtrip
+        const cols = document.querySelectorAll('.day-col').length; console.assert(cols === 7, 'Should render 7 day columns');
         const todayISO = new Date().toISOString().slice(0,10);
         saveNames(todayISO, 'day', ['Test User']);
         const loaded = loadNames(todayISO, 'day');
         console.assert(Array.isArray(loaded) && loaded.includes('Test User'), 'Storage load/save failed');
-
+        const enc = `${todayISO}|night`; const [d1, s1] = enc.split('|'); console.assert(d1 === todayISO && s1 === 'night', 'Choice parsing failed');
         console.groupEnd();
-      } catch(e) {
-        console.error('Tests failed', e);
-      }
+      } catch(e) { console.error('Tests failed', e); }
     })();
   </script>
 </body>
