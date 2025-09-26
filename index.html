@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="no">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Weekly Shift Calendar</title>
+  <title>Ønske om ekstraskift</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -38,7 +38,7 @@
     .shift.night { background: var(--night); }
     .today .day-header { outline: 2px solid var(--today); outline-offset: -2px; }
 
-    /* Signup modal */
+    /* Påmeldingsmodal */
     .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); z-index: 50; padding: 16px; }
     .modal.open { display: flex; }
     .dialog { width: min(900px, 96vw); background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
@@ -60,36 +60,36 @@
 <body>
   <div class="wrapper">
     <header>
-      <h1>Weekly Shift Calendar</h1>
+      <h1>Ukentlig Vaktplan</h1>
       <div id="range" class="sub"></div>
       <div class="controls">
-        <button class="btn" id="prev">◀ Prev</button>
-        <button class="btn" id="today">Today</button>
-        <button class="btn" id="next">Next ▶</button>
-        <button class="btn" id="signupBtn">✚ Sign up</button>
+        <button class="btn" id="prev">◀ Forrige</button>
+        <button class="btn" id="today">I dag</button>
+        <button class="btn" id="next">Neste ▶</button>
+        <button class="btn" id="signupBtn">✚ Meld deg på</button>
       </div>
     </header>
 
     <section id="calendar" class="calendar"></section>
 
-    <!-- Signup Modal -->
+    <!-- Påmeldingsmodal -->
     <div id="signupModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="signupTitle">
       <div class="dialog">
         <header>
-          <h2 id="signupTitle">Sign up for extra shifts</h2>
+          <h2 id="signupTitle">Meld deg på ekstra vakter</h2>
           <button class="btn secondary" id="closeModal">✕</button>
         </header>
         <div class="body">
           <div class="field">
-            <label for="nameInput">Your name</label>
-            <input id="nameInput" class="input" placeholder="Type your name" />
-            <small class="sub">You can select multiple days and shifts.</small>
+            <label for="nameInput">Navnet ditt</label>
+            <input id="nameInput" class="input" placeholder="Skriv inn navnet ditt" />
+            <small class="sub">Du kan velge flere dager og vakter.</small>
           </div>
           <div class="choices" id="choices"></div>
         </div>
         <footer>
-          <button class="btn secondary" id="cancelBtn">Cancel</button>
-          <button class="btn" id="submitSignup">Add to selected shifts</button>
+          <button class="btn secondary" id="cancelBtn">Avbryt</button>
+          <button class="btn" id="submitSignup">Legg til på valgte vakter</button>
         </footer>
       </div>
     </div>
@@ -97,26 +97,25 @@
 
   <script>
     const TZ = 'Europe/Oslo';
-    const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const WEEKDAYS = ['Søndag','Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag'];
 
     const WEEKDAY_SHIFTS = [
-      { name: 'Day Shift', type: 'day', start: '07:00', end: '15:00', hours: 8 },
-      { name: 'Evening Shift', type: 'evening', start: '15:00', end: '23:00', hours: 8 },
-      { name: 'Night Shift', type: 'night', start: '23:00', end: '07:00', hours: 8 },
+      { name: 'Dagvakt', type: 'day', start: '07:00', end: '15:00', hours: 8 },
+      { name: 'Kveldsvakt', type: 'evening', start: '15:00', end: '23:00', hours: 8 },
+      { name: 'Nattevakt', type: 'night', start: '23:00', end: '07:00', hours: 8 },
     ];
     const WEEKEND_SHIFTS = [
-      { name: 'Day Shift', type: 'day', start: '07:00', end: '19:00', hours: 12 },
-      { name: 'Night Shift', type: 'night', start: '19:00', end: '07:00', hours: 12 },
+      { name: 'Dagvakt', type: 'day', start: '07:00', end: '19:00', hours: 12 },
+      { name: 'Nattevakt', type: 'night', start: '19:00', end: '07:00', hours: 12 },
     ];
 
-    const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric' });
-    const fmtShort = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: '2-digit', month: 'short' });
+    const fmt = new Intl.DateTimeFormat('no-NO', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric' });
+    const fmtShort = new Intl.DateTimeFormat('no-NO', { timeZone: TZ, day: '2-digit', month: 'short' });
 
     function addDays(date, days) { const d = new Date(date); d.setUTCDate(d.getUTCDate() + days); return d; }
     function getShifts(dayIndex) { return (dayIndex >= 1 && dayIndex <= 4) ? WEEKDAY_SHIFTS : WEEKEND_SHIFTS; }
 
-    // --- Sign-up storage helpers ---
-    // Use localStorage when available; fall back to an in-memory store so the UI still works in sandboxed browsers.
+    // --- Lagring av påmeldinger ---
     const memoryStore = new Map();
     function key(dateISO, shiftType) { return `signup:${dateISO}:${shiftType}`; }
     function loadNames(dateISO, shiftType) {
@@ -124,7 +123,7 @@
       try {
         const raw = localStorage.getItem(k);
         if (raw) return JSON.parse(raw);
-      } catch (e) { /* ignore */ }
+      } catch (e) { /* ignorer */ }
       return memoryStore.get(k) || [];
     }
     function saveNames(dateISO, shiftType, arr) {
@@ -133,12 +132,11 @@
       catch (e) { memoryStore.set(k, arr); }
     }
 
-    // Keep the currently rendered week data to build the modal choices
     let weekData = [];
 
     function renderNamesList(container, dateISO, shiftType) {
       const names = loadNames(dateISO, shiftType);
-      if (!names.length) { container.innerHTML = '<em>No sign-ups yet</em>'; return; }
+      if (!names.length) { container.innerHTML = '<em>Ingen påmeldinger enda</em>'; return; }
       container.innerHTML = names.map(n => `<span class="name">• ${n}</span>`).join('');
     }
 
@@ -202,18 +200,17 @@
       range.textContent = `${fmtShort.format(start)} – ${fmt.format(addDays(start,6))}`;
     }
 
-    // Controls
+    // Kontroller
     document.getElementById('prev').addEventListener('click', () => { render(-1); });
     document.getElementById('next').addEventListener('click', () => { render(1); });
     document.getElementById('today').addEventListener('click', () => { render(0); });
 
-    // --- Signup modal logic ---
+    // --- Påmeldingslogikk ---
     const modal = document.getElementById('signupModal');
     const choicesEl = document.getElementById('choices');
     const nameInput = document.getElementById('nameInput');
 
     function openSignupModal() {
-      // Build checkbox list from weekData
       choicesEl.innerHTML = '';
       weekData.forEach(day => {
         const group = document.createElement('div');
@@ -253,7 +250,6 @@
       const checks = choicesEl.querySelectorAll('input[type="checkbox"]:checked');
       if (!checks.length) return;
 
-      // Apply to each selected shift (unique per shift)
       const updates = [];
       checks.forEach(ch => {
         const [dateISO, shiftType] = ch.value.split('|');
@@ -263,10 +259,9 @@
         updates.push({ dateISO, shiftType, arr });
       });
 
-      // Update visible lists instantly
       updates.forEach(({ dateISO, shiftType, arr }) => {
         document.querySelectorAll(`.shift[data-date="${dateISO}"][data-shift="${shiftType}"] .names-list`).forEach(list => {
-          list.innerHTML = arr.length ? arr.map(n => `<span class=\"name\">• ${n}</span>`).join('') : '<em>No sign-ups yet</em>';
+          list.innerHTML = arr.length ? arr.map(n => `<span class=\"name\">• ${n}</span>`).join('') : '<em>Ingen påmeldinger enda</em>';
         });
       });
 
@@ -274,26 +269,7 @@
       closeSignupModal();
     });
 
-    // Initial render
     render(0);
-
-    // -----------------
-    // Basic sanity tests (console)
-    // -----------------
-    (function runTests(){
-      try {
-        console.groupCollapsed('%cShift Calendar Tests','color:#10b981');
-        console.assert(getShifts(1).length === 3 && getShifts(4).length === 3, 'Weekday shifts should be 3 blocks');
-        console.assert(getShifts(0).length === 2 && getShifts(6).length === 2, 'Weekend shifts should be 2 blocks');
-        const cols = document.querySelectorAll('.day-col').length; console.assert(cols === 7, 'Should render 7 day columns');
-        const todayISO = new Date().toISOString().slice(0,10);
-        saveNames(todayISO, 'day', ['Test User']);
-        const loaded = loadNames(todayISO, 'day');
-        console.assert(Array.isArray(loaded) && loaded.includes('Test User'), 'Storage load/save failed');
-        const enc = `${todayISO}|night`; const [d1, s1] = enc.split('|'); console.assert(d1 === todayISO && s1 === 'night', 'Choice parsing failed');
-        console.groupEnd();
-      } catch(e) { console.error('Tests failed', e); }
-    })();
   </script>
 </body>
 </html>
